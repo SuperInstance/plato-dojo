@@ -1,0 +1,8 @@
+{
+  "turn": 20,
+  "actor": "agent",
+  "delta": -1,
+  "perturbation": 0,
+  "balance_after": 2,
+  "game_id": "ternary-balance-211"
+}

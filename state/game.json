@@ -1,0 +1,43 @@
+{
+  "game_id": "ternary-balance-435",
+  "status": "playing",
+  "balance": 0,
+  "target": 0,
+  "max_turns": 20,
+  "current_turn": 2,
+  "turn": "player",
+  "players": {
+    "player": {
+      "name": "human",
+      "score": -1
+    }
+  },
+  "agents": {
+    "agent": {
+      "name": "plato-agent",
+      "score": 0
+    }
+  },
+  "history": [
+    {
+      "turn": 1,
+      "actor": "player",
+      "delta": 1,
+      "perturbation": 0,
+      "balance_after": 1,
+      "game_id": "ternary-balance-435"
+    },
+    {
+      "turn": 2,
+      "actor": "agent",
+      "delta": -1,
+      "perturbation": 0,
+      "balance_after": 0,
+      "game_id": "ternary-balance-435"
+    }
+  ],
+  "win_condition": "closest_to_zero_after_max_turns",
+  "difficulty": "easy",
+  "modifiers": [],
+  "version": 1
+}

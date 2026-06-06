@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLATO Dojo — Four Souls</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Serif+KR:wght@400;700&family=Inter:wght@400;600&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e0e0e0; font-family: 'Inter', sans-serif; min-height: 100vh; }
+  
+  .header { text-align: center; padding: 2rem 1rem; border-bottom: 1px solid #222; }
+  .header h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.3rem; }
+  .header .sub { color: #888; font-size: 0.9rem; }
+  .header .raw { color: #555; font-size: 0.75rem; font-family: monospace; margin-top: 0.5rem; }
+  
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #222; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  
+  .card { padding: 1.5rem; background: #0f0f16; min-height: 300px; position: relative; overflow: hidden; }
+  .card:hover { background: #12121a; }
+  
+  .card h2 { font-size: 1.2rem; margin-bottom: 0.2rem; }
+  .card .lang { font-size: 0.75rem; color: #666; margin-bottom: 1rem; }
+  
+  .symbol { font-size: 3rem; text-align: center; margin: 1rem 0; transition: all 0.5s ease; }
+  
+  .state-row { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid #1a1a24; font-size: 0.85rem; }
+  .state-row .key { color: #888; }
+  .state-row .val { color: #0f0; font-family: monospace; }
+  
+  .moves { margin-top: 1rem; }
+  .moves-title { font-size: 0.75rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+  .move-dots { display: flex; gap: 0.5rem; }
+  .move-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; }
+  .move-plus { background: rgba(255,80,80,0.3); color: #ff6666; }
+  .move-zero { background: rgba(100,200,255,0.2); color: #88ccff; }
+  .move-minus { background: rgba(80,255,80,0.2); color: #66ff66; }
+  
+  .vibe { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; transition: all 0.5s; }
+  
+  .loading { color: #555; text-align: center; padding: 2rem; }
+  .error { color: #f66; text-align: center; padding: 2rem; }
+  
+  .json-input { display: none; }
+  .status-bar { text-align: center; padding: 0.5rem; font-size: 0.75rem; color: #444; }
+  
+  .footer { text-align: center; padding: 1rem; color: #333; font-size: 0.7rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌀 PLATO Dojo</h1>
+  <div class="sub">One state. Five souls.</div>
+  <div id="rawState" class="raw">Waiting for state...</div>
+</div>
+
+<div class="grid" id="grid"></div>
+<div class="status-bar" id="statusBar">
+  ⏳ Load state.json into browser or use the auto-refresh server
+</div>
+<div class="footer">python3 -m http.server 8081 &amp;&amp; open http://localhost:8081/human-view/</div>
+
+<script>
+const LENSES = {
+  "zhong-qi": {
+    name: "中气",
+    subtitle: "Zhōng Qì — Chinese",
+    font: "'Noto Serif SC', serif",
+    balanceKey: "气",
+    targetKey: "道",
+    turnKey: "劫数",
+    diffKey: "难度",
+    symbol: (b) => b === 0 ? "圆" : (b > 3 ? "阳" : (b < -3 ? "阴" : "中")),
+    symbolColor: (b) => b === 0 ? "#ffcc00" : (b > 0 ? "#ff6644" : "#44aaff"),
+    vibeBar: (b) => {
+      const pct = Math.max(0, 50 - Math.abs(b) * 10);
+      return `linear-gradient(90deg, #44aaff ${50-b*10}%, #ffcc00 ${50-pct/2}%, #ff6644 ${50+b*10}%)`;
+    },
+    action: (d) => d === -1 ? "阴" : d === 0 ? "中" : "阳",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "☯ 太极 — 完美和谐";
+      if (absB <= 2) return "⚖ 微调 — 气稍偏";
+      if (absB <= 5) return "🌊 失衡 — 需守中";
+      return "⚡ 失道 — 急待调和";
+    }
+  },
+  "jeong-su": {
+    name: "정수",
+    subtitle: "Jeong-Su — Korean",
+    font: "'Noto Serif KR', serif",
+    balanceKey: "균형",
+    targetKey: "목표",
+    turnKey: "회차",
+    diffKey: "난이도",
+    symbol: (b) => b === 0 ? "태극" : (b > 2 ? "양🔥" : (b < -2 ? "음💧" : "조화")),
+    symbolColor: (b) => b === 0 ? "#ff3366" : (b > 0 ? "#ff4444" : "#3366ff"),
+    vibeBar: (b) => {
+      const pct = Math.max(0, 70 - Math.abs(b) * 10);
+      return `linear-gradient(90deg, #3366ff ${50-b*8}%, #ff3366 ${50+b*8}%)`;
+    },
+    action: (d) => d === -1 ? "음-정" : d === 0 ? "화합" : "양-정",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "💞 정이 깊다 — 깊은 연결";
+      if (absB <= 2) return "🤝 정 나누는 중 — 소통 중";
+      if (absB <= 5) return "💔 정이 흔들린다 — 연결 약화";
+      return "💢 정이 끊어졌다 — 연결 위기";
+    }
+  },
+  "sisu": {
+    name: "Sisu",
+    subtitle: "Sisu — Finnish",
+    font: "'Inter', sans-serif",
+    balanceKey: "tasapaino",
+    targetKey: "kohde",
+    turnKey: "kierros",
+    diffKey: "vaikeus",
+    symbol: (b) => Math.abs(b) <= 1 ? "🔥 nuotio" : (b > 0 ? "❄️ lumi" : "🌲 metsä"),
+    symbolColor: (b) => Math.abs(b) <= 1 ? "#ff8800" : "#446688",
+    vibeBar: (b) => {
+      const bright = Math.max(10, 80 - Math.abs(b) * 8);
+      return `linear-gradient(90deg, #1a2a3a, #2a3a1a ${50-b*8}%, #ff8800 ${50-b*4}%, #ffaa44)`;
+    },
+    action: (d) => d === -1 ? "−1" : d === 0 ? "0" : "+1",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "🔥 Nuotio palaa kirkkaana — Fire burns bright";
+      if (absB <= 2) return "🌲 Hiljainen metsä — Quiet forest";
+      if (absB <= 5) return "❄️ Lumi sataa — Snow is falling";
+      return "🌫 Eksynyt — Lost in the woods";
+    }
+  },
+  "sankofa": {
+    name: "Sankofa",
+    subtitle: "Sankofa — Akan/West African",
+    font: "'Inter', sans-serif",
+    balanceKey: "twea",
+    targetKey: "nsusui",
+    turnKey: "nantew",
+    diffKey: "mmɔden",
+    symbol: (b) => b === 0 ? "🛡️ Ɛban" : (Math.abs(b) <= 2 ? "⭐ Nsoroma" : "⛓️ Nkonsonkonson"),
+    symbolColor: (b) => b === 0 ? "#ffd700" : (Math.abs(b) <= 2 ? "#ffaa00" : "#cc3333"),
+    vibeBar: (b) => {
+      const gold = Math.max(0, 255 - Math.abs(b) * 30);
+      const red = Math.min(255, 100 + Math.abs(b) * 30);
+      return `linear-gradient(90deg, #2a1a00, #${gold.toString(16)}a000 ${50-b*8}%, #${red.toString(16)}0000)`;
+    },
+    action: (d) => d === -1 ? "ɛna" : d === 0 ? "mfinimfini" : "agya",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "🛡️ Ɛban — Safety, protection";
+      if (absB <= 2) return "⭐ Nsoroma — Star, divine alignment";
+      if (absB <= 5) return "🧵 Ntomago — Many threads, rich pattern";
+      return "⛓️ Nkonsonkonson — The chain binds";
+    }
+  },
+  "dreamtime": {
+    name: "Dreamtime",
+    subtitle: "Dreamtime — Indigenous Australian",
+    font: "'Inter', sans-serif",
+    balanceKey: "song",
+    targetKey: "songline",
+    turnKey: "walk",
+    diffKey: "walkabout",
+    symbol: (b) => b === 0 ? "💧" : (Math.abs(b) <= 2 ? "🌏" : (b > 0 ? "🏜️" : "🪨")),
+    symbolColor: (b) => b === 0 ? "#44aadd" : (Math.abs(b) <= 2 ? "#88bb88" : "#bb6644"),
+    vibeBar: (b) => {
+      const water = Math.max(0, 180 - Math.abs(b) * 20);
+      const earth = Math.min(200, 60 + Math.abs(b) * 15);
+      return `linear-gradient(90deg, #1a2a1a, #${earth.toString(16)}6644 ${50-b*8}%, #44aadd, #1a2a3a)`;
+    },
+    action: (d) => d === -1 ? "low-didge" : d === 0 ? "silence" : "high-beat",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "💧 Waterhole still — Country strong";
+      if (absB <= 2) return "🌏 Country fair — Song needs tuning";
+      if (absB <= 5) return "🏜️ Country weak — Keep singing";
+      return "🪨 Country silent — The dreaming waits";
+    }
+  }
+    vibeBar: (b) => {
+      const red = Math.min(255, 100 + Math.abs(b) * 30);
+      const gold = Math.max(0, 255 - Math.abs(b) * 30);
+      return `linear-gradient(90deg, #2a1a00, #${gold.toString(16)}a000 ${50-b*8}%, #${red.toString(16)}0000)`;
+    },
+    action: (d) => d === -1 ? "ɛna" : d === 0 ? "mfinimfini" : "agya",
+    actionClass: (d) => d === -1 ? "move-minus" : d === 0 ? "move-zero" : "move-plus",
+    energyBar: (b) => {
+      const absB = Math.abs(b);
+      if (absB === 0) return "🛡️ Ɛban — Safety, protection";
+      if (absB <= 2) return "⭐ Nsoroma — Star, divine alignment";
+      if (absB <= 5) return "🧵 Ntomago — Many threads, rich pattern";
+      return "⛓️ Nkonsonkonson — The chain binds";
+    }
+  }
+};
+
+async function render() {
+  try {
+    const resp = await fetch('../state/game.json?' + Date.now());
+    if (!resp.ok) throw new Error('Not found');
+    const state = await resp.json();
+    
+    const b = state.balance || 0;
+    const t = state.current_turn || 0;
+    const mt = state.max_turns || 20;
+    const diff = state.difficulty || 'easy';
+    const history = state.history || [];
+    const last3 = history.slice(-3).map(m => m.delta);
+    
+    document.getElementById('rawState').textContent = 
+      `balance: ${b}  |  turn: ${t}/${mt}  |  difficulty: ${diff}  |  game: ${state.game_id || '?'}`;
+    
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    
+    for (const [key, lens] of Object.entries(LENSES)) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.fontFamily = lens.font;
+      
+      const symbol = lens.symbol(b);
+      const color = lens.symbolColor(b);
+      
+      card.innerHTML = `
+        <h2>${lens.name}</h2>
+        <div class="lang">${lens.subtitle}</div>
+        <div class="symbol" style="color:${color}">${symbol}</div>
+        <div class="state-row"><span class="key">${lens.balanceKey}</span><span class="val">${b}</span></div>
+        <div class="state-row"><span class="key">${lens.targetKey}</span><span class="val">0</span></div>
+        <div class="state-row"><span class="key">${lens.turnKey}</span><span class="val">${t}/${mt}</span></div>
+        <div class="state-row"><span class="key">${lens.diffKey}</span><span class="val">${diff}</span></div>
+        <div class="moves">
+          <div class="moves-title">last moves</div>
+          <div class="move-dots">
+            ${last3.length === 0 ? '<span style="color:#444;font-size:0.7rem">—</span>' : 
+              last3.map(d => `<div class="move-dot ${lens.actionClass(d)}">${lens.action(d)}</div>`).join('')}
+          </div>
+        </div>
+        <div style="margin-top:0.8rem;font-size:0.75rem;color:#666">${lens.energyBar(b)}</div>
+        <div class="vibe" style="background:${lens.vibeBar(b)}"></div>
+      `;
+      
+      grid.appendChild(card);
+    }
+    
+    document.getElementById('statusBar').textContent = 
+      `🔄 Auto-refresh | Balance: ${b} | Turn: ${t}/${mt} | ${new Date().toLocaleTimeString()}`;
+      
+  } catch(e) {
+    document.getElementById('statusBar').textContent = '⏳ Waiting for state/game.json... ' + e.message;
+  }
+}
+
+render();
+setInterval(render, 2000);
+</script>
+</body>
+</html>

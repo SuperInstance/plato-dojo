@@ -1,0 +1,8 @@
+{
+  "turn": 3,
+  "actor": "player",
+  "delta": 1,
+  "perturbation": 0,
+  "balance_after": 1,
+  "game_id": "ternary-balance-211"
+}
